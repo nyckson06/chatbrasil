@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OmeTV Clone</title>
+  <style>
+    body {
+      background: #111;
+      color: white;
+      font-family: Arial;
+      text-align: center;
+      padding: 20px;
+    }
+    video {
+      width: 45%;
+      max-width: 400px;
+      border: 3px solid #ff0000;
+      border-radius: 10px;
+      margin: 10px;
+    }
+    button {
+      background-color: #ff0000;
+      border: none;
+      padding: 10px 20px;
+      color: white;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎥 OmeTV Clone</h1>
+  <video id="localVideo" autoplay muted playsinline></video>
+  <video id="remoteVideo" autoplay playsinline></video>
+  <br>
+  <button onclick="trocarPessoa()">🔁 Próxima Pessoa</button>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import { getDatabase, ref, onValue, set, remove, get } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+
+    const firebaseConfig = {'apiKey': 'AIzaSyCzj4sP6TvIg1kFAAZ3hrgy9KqAWkDCnx4', 'authDomain': 'skotvidero.firebaseapp.com', 'databaseURL': 'https://skotvidero-default-rtdb.firebaseio.com', 'projectId': 'skotvidero', 'storageBucket': 'skotvidero.appspot.com', 'messagingSenderId': '797827317952', 'appId': '1:797827317952:android:83ec9bb10d5a283826ed25'};
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let localStream;
+    let peerConnection;
+    const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+    const localVideo = document.getElementById("localVideo");
+    const remoteVideo = document.getElementById("remoteVideo");
+
+    const uid = "user_" + Math.floor(Math.random() * 999999);
+
+    async function iniciarCamera() {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localVideo.srcObject = localStream;
+    }
+
+    async function conectarComParceiro(parceiroId) {
+      peerConnection = new RTCPeerConnection(servers);
+      localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+      peerConnection.ontrack = e => {
+        remoteVideo.srcObject = e.streams[0];
+      };
+
+      peerConnection.onicecandidate = event => {
+        if (event.candidate) {
+          set(ref(db, "signals/" + parceiroId + "/candidates/" + uid), event.candidate.toJSON());
+        }
+      };
+
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      await set(ref(db, "signals/" + parceiroId + "/offers/" + uid), offer);
+
+      onValue(ref(db, "signals/" + uid + "/offers/" + parceiroId), async snap => {
+        if (snap.exists()) {
+          const answer = snap.val();
+          await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        }
+      });
+
+      onValue(ref(db, "signals/" + uid + "/candidates/" + parceiroId), async snap => {
+        if (snap.exists()) {
+          try {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(snap.val()));
+          } catch (e) {}
+        }
+      });
+    }
+
+    async function buscarParceiro() {
+      const matchRef = ref(db, "queue");
+      await set(ref(db, "queue/" + uid), true);
+
+      const snapshot = await get(matchRef);
+      let parceiroId = null;
+
+      snapshot.forEach(child => {
+        if (child.key !== uid && !parceiroId) {
+          parceiroId = child.key;
+        }
+      });
+
+      if (parceiroId) {
+        await remove(ref(db, "queue/" + uid));
+        await remove(ref(db, "queue/" + parceiroId));
+        conectarComParceiro(parceiroId);
+      } else {
+        setTimeout(buscarParceiro, 3000);
+      }
+    }
+
+    function trocarPessoa() {
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+      remoteVideo.srcObject = null;
+      buscarParceiro();
+    }
+
+    iniciarCamera().then(buscarParceiro);
+  </script>
+</body>
+</html>
