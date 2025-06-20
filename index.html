@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>OmeTV Clone</title>
+  <title>VideoChat Aleatório</title>
   <style>
     body {
       background: #111;
@@ -34,6 +34,7 @@
   <h1>🎥 OmeTV Clone</h1>
   <video id="localVideo" autoplay muted playsinline></video>
   <video id="remoteVideo" autoplay playsinline></video>
+  <p id="remoteIp" style="color: #0ff;"></p>
   <br>
   <button onclick="trocarPessoa()">🔁 Próxima Pessoa</button>
 
@@ -41,7 +42,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
     import { getDatabase, ref, onValue, set, remove, get } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
 
-    const firebaseConfig = {'apiKey': 'AIzaSyCzj4sP6TvIg1kFAAZ3hrgy9KqAWkDCnx4', 'authDomain': 'skotvidero.firebaseapp.com', 'databaseURL': 'https://skotvidero-default-rtdb.firebaseio.com', 'projectId': 'skotvidero', 'storageBucket': 'skotvidero.appspot.com', 'messagingSenderId': '797827317952', 'appId': '1:797827317952:android:83ec9bb10d5a283826ed25'};
+    const firebaseConfig = {'apiKey': 'AIzaSyAveppCOTuRNMAHYNoJHEO7COt2YJuo3ro', 'authDomain': 'nubankfakevipmy.firebaseapp.com', 'databaseURL': 'https://nubankfakevipmy-default-rtdb.firebaseio.com', 'projectId': 'nubankfakevipmy', 'storageBucket': 'nubankfakevipmy.appspot.com', 'messagingSenderId': '413206159172', 'appId': '1:413206159172:web:010bcc015eeb2d3a248111'};
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
@@ -110,6 +111,20 @@
         await remove(ref(db, "queue/" + uid));
         await remove(ref(db, "queue/" + parceiroId));
         conectarComParceiro(parceiroId);
+
+      // Buscar IP do parceiro após conexão
+      fetch("https://api.ipify.org?format=json").then(res => res.json()).then(ip => {
+        set(ref(db, "ips/" + uid), ip.ip);
+      });
+
+      get(ref(db, "ips/" + parceiroId)).then(snap => {
+        if (snap.exists()) {
+          document.getElementById("remoteIp").innerText = "IP do parceiro: " + snap.val();
+        } else {
+          document.getElementById("remoteIp").innerText = "IP do parceiro: (Desconhecido)";
+        }
+      });
+
       } else {
         setTimeout(buscarParceiro, 3000);
       }
